@@ -1,91 +1,68 @@
 from lib.database.connection import get_connection
-from lib.models.article import Article
 
 class Author:
-    def __init__(self, name):
-        self._id = None
-        self._name = None
+    def __init__(self, id=None, name=None):
+        self.id = id
         self.name = name
-        self.save()
-
-    @property
-    def id(self):
-        return self._id
-
-    @property
-    def name(self):
-        return self._name
-
-    @name.setter
-    def name(self, new_name):
-        if hasattr(self, "_name") and self._name is not None:
-            raise AttributeError("Name cannot be changed after being set")
-        if not isinstance(new_name, str):
-            raise TypeError("Name must be a string")
-        if len(new_name) == 0:
-            raise ValueError("Name must be longer than 0 characters")
-        self._name = new_name
-        if self._id is not None:
-            self.save()
+        if not name or not name.strip():
+            raise ValueError("Author name cannot be empty")
 
     def save(self):
         conn = get_connection()
         cursor = conn.cursor()
-        if self._id is None:
-            cursor.execute("INSERT INTO authors (name) VALUES (?)", (self._name,))
-            self._id = cursor.lastrowid
+        if self.id is None:
+            cursor.execute("INSERT INTO authors (name) VALUES (?)", (self.name,))
+            self.id = cursor.lastrowid
         else:
-            cursor.execute("UPDATE authors SET name = ? WHERE id = ?", (self._name, self._id))
+            cursor.execute("UPDATE authors SET name = ? WHERE id = ?", (self.name, self.id))
         conn.commit()
         conn.close()
 
     @classmethod
-    def find_by_id(cls, id):
+    def find_by_id(cls, author_id):
         conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, name FROM authors WHERE id = ?", (id,))
+        cursor.execute("SELECT * FROM authors WHERE id = ?", (author_id,))
         row = cursor.fetchone()
         conn.close()
         if row:
-            author = cls(row["name"])
-            author._id = row["id"]
-            return author
+            return cls(id=row["id"], name=row["name"])
+        return None
+
+    @classmethod
+    def find_by_name(cls, name):
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM authors WHERE name = ?", (name,))
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return cls(id=row["id"], name=row["name"])
         return None
 
     def articles(self):
         conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, title, author_id, magazine_id FROM articles WHERE author_id = ?", (self._id,))
-        rows = cursor.fetchall()
+        cursor.execute("SELECT * FROM articles WHERE author_id = ?", (self.id,))
+        articles = cursor.fetchall()
         conn.close()
-        return [Article.find_by_id(row["id"]) for row in rows]
+        return articles
 
     def magazines(self):
         conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute("""
-            SELECT DISTINCT m.id, m.name, m.category
-            FROM magazines m
-            JOIN articles a ON m.id = a.magazine_id
-            WHERE a.author_id = ?
-        """, (self._id,))
-        rows = cursor.fetchall()
+        cursor.execute("SELECT DISTINCT m.* FROM magazines m JOIN articles a ON m.id = a.magazine_id WHERE a.author_id = ?", (self.id,))
+        magazines = cursor.fetchall()
         conn.close()
-        from lib.models.magazine import Magazine
-        return [Magazine.find_by_id(row["id"]) for row in rows]
+        return magazines
 
     def add_article(self, magazine, title):
-        return Article(self, magazine, title)
-
-    def topic_areas(self):
+        if not title or not title.strip():
+            raise ValueError("Article title cannot be empty")
+        if not magazine or not hasattr(magazine, "id"):
+            raise ValueError("Magazine must be provided with an id")
         conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute("""
-            SELECT DISTINCT m.category
-            FROM magazines m
-            JOIN articles a ON m.id = a.magazine_id
-            WHERE a.author_id = ?
-        """, (self._id,))
-        rows = cursor.fetchall()
+        cursor.execute("INSERT INTO articles (title, author_id, magazine_id) VALUES (?, ?, ?)", (title, self.id, magazine.id))
+        conn.commit()
         conn.close()
-        return [row["category"] for row in rows] if rows else None
