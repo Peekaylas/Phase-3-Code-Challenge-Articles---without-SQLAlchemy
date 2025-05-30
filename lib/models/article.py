@@ -10,11 +10,17 @@ class Article:
     def save(self):
         conn = get_connection()
         cursor = conn.cursor()
+
         if self.id:
-            cursor.execute("UPDATE articles SET title = ?, author_id = ?, magazine_id = ? WHERE id = ?", (self.title, self.author_id, self.magazine_id, self.id))
+            cursor.execute("""
+                UPDATE articles SET title = ?, author_id = ?, magazine_id = ? WHERE id = ?
+            """, (self.title, self.author_id, self.magazine_id, self.id))
         else:
-            cursor.execute("INSERT INTO articles (title, author_id, magazine_id) VALUES (?, ?, ?)", (self.title, self.author_id, self.magazine_id))
+            cursor.execute("""
+                INSERT INTO articles (title, author_id, magazine_id) VALUES (?, ?, ?)
+            """, (self.title, self.author_id, self.magazine_id))
             self.id = cursor.lastrowid
+
         conn.commit()
         conn.close()
 
@@ -55,11 +61,3 @@ class Article:
         rows = cursor.fetchall()
         conn.close()
         return [cls(id=row["id"], title=row["title"], author_id=row["author_id"], magazine_id=row["magazine_id"]) for row in rows]
-
-    def author(self):
-        from lib.models.author import Author
-        return Author.find_by_id(self.author_id)
-
-    def magazine(self):
-        from lib.models.magazine import Magazine
-        return Magazine.find_by_id(self.magazine_id)
